@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal Web Editor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; display: flex; height: 100vh; background: #1e1e1e; color: #d4d4d4; }
+    
+    #sidebar { width: 250px; background: #252526; border-right: 1px solid #333; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 12px; font-weight: bold; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+    
+    #file-list { flex: 1; overflow-y: auto; list-style: none; padding: 8px 0; }
+    .file-item { padding: 6px 16px; cursor: pointer; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+    .file-item:hover { background: #2a2d2e; }
+    .file-item.active { background: #37373d; color: #fff; }
+    
+    .actions { padding: 12px; border-top: 1px solid #333; display: flex; gap: 8px; flex-direction: column; }
+    button { background: #0e639c; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+    button:hover { background: #1177bb; }
+    button.secondary { background: #3c3c3c; }
+    button.secondary:hover { background: #4c4c4c; }
+
+    #editor-container { flex: 1; display: flex; flex-direction: column; }
+    #tab-bar { height: 35px; background: #2d2d2d; display: flex; align-items: center; padding-left: 8px; font-size: 0.85rem; border-bottom: 1px solid #1e1e1e; }
+    #editor { flex: 1; width: 100%; height: 100%; background: #1e1e1e; color: #d4d4d4; border: none; padding: 16px; font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; resize: none; outline: none; }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <span>Files</span>
+    </div>
+    <ul id="file-list"></ul>
+    <div class="actions">
+      <button class="secondary" onclick="createNewFile()">+ New File</button>
+      <button onclick="exportToFolder()">Export Folder</button>
+    </div>
+  </div>
+
+  <div id="editor-container">
+    <div id="tab-bar">No file open</div>
+    <textarea id="editor" placeholder="Select or create a file to start editing..." disabled></textarea>
+  </div>
+
+  <script>
+    const ALLOWED_EXTENSIONS = ['.html', '.css', '.js', '.md', '.txt'];
+    const files = new Map();
+    let activeFile = null;
+
+    const fileListEl = document.getElementById('file-list');
+    const editorEl = document.getElementById('editor');
+    const tabBarEl = document.getElementById('tab-bar');
+
+    files.set('index.html', '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello World</h1>\n  <script src="script.js"><\/script>\n</body>\n</html>');
+    files.set('style.css', 'body {\n  font-family: sans-serif;\n  background: #f0f0f0;\n}');
+    files.set('script.js', 'console.log("Loaded!");');
+    files.set('notes.md', '# Project Notes\n\nThis is a Markdown file.');
+
+    function renderFileList() {
+      fileListEl.innerHTML = '';
+      files.forEach((_, filename) => {
+        const li = document.createElement('li');
+        li.className = `file-item ${filename === activeFile ? 'active' : ''}`;
+        li.textContent = filename;
+        li.onclick = () => selectFile(filename);
+        fileListEl.appendChild(li);
+      });
+    }
+
+    function selectFile(filename) {
+      if (activeFile && files.has(activeFile)) {
+        files.set(activeFile, editorEl.value);
+      }
+      activeFile = filename;
+      tabBarEl.textContent = filename;
+      editorEl.value = files.get(filename);
+      editorEl.disabled = false;
+      renderFileList();
+    }
+
+    editorEl.addEventListener('input', () => {
+      if (activeFile) {
+        files.set(activeFile, editorEl.value);
+      }
+    });
+
+    function createNewFile() {
+      const filename = prompt('Enter filename (must end in .html, .css, .js, .md, or .txt):');
+      if (!filename) return;
+
+      const hasValidExt = ALLOWED_EXTENSIONS.some(ext => filename.endsWith(ext));
+      if (!hasValidExt) {
+        alert(`Invalid extension. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`);
+        return;
+      }
+
+      if (files.has(filename)) {
+        alert('File already exists.');
+        return;
+      }
+
+      files.set(filename, '');
+      selectFile(filename);
+    }
+
+    async function exportToFolder() {
+      if (files.size === 0) {
+        alert('No files to export.');
+        return;
+      }
+
+      if (!('showDirectoryPicker' in window)) {
+        alert('Your browser does not support exporting directly to standard folders via the File System Access API. Please use Chrome, Edge, or Opera.');
+        return;
+      }
+
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+
+        for (const [filename, content] of files.entries()) {
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(content);
+          await writable.close();
+        }
+
+        alert('Folder exported successfully!');
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Export failed:', err);
+          alert('Failed to export folder.');
+        }
+      }
+    }
+
+    renderFileList();
+    selectFile('index.html');
+  </script>
+</body>
+</html>
