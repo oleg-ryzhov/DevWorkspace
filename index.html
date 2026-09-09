@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DevWorkspace Studio</title>
+  <title>DevWorkspace Studio Cloud E2EE</title>
   
   <!-- CodeMirror CSS & Themes -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
@@ -15,8 +15,9 @@
 
     /* Login Screen */
     #login-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background: #121212; }
-    .auth-card { background: #252526; padding: 32px; border-radius: 8px; width: 340px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border: 1px solid #333; }
-    .auth-card h2 { margin-bottom: 20px; color: #fff; text-align: center; }
+    .auth-card { background: #252526; padding: 32px; border-radius: 8px; width: 360px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border: 1px solid #333; }
+    .auth-card h2 { margin-bottom: 12px; color: #fff; text-align: center; }
+    .auth-card p { margin-bottom: 20px; font-size: 0.8rem; color: #aaa; text-align: center; line-height: 1.4; }
     .auth-card input { width: 100%; padding: 10px; margin-bottom: 12px; background: #1e1e1e; border: 1px solid #3c3c3c; color: white; border-radius: 4px; outline: none; }
     .auth-card input:focus { border-color: #0e639c; }
     .auth-card button { width: 100%; padding: 10px; background: #0e639c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 8px; }
@@ -39,7 +40,8 @@
     button.danger { background: #9c0e0e; }
     button.danger:hover { background: #bb1111; }
     
-    .user-info { display: flex; align-items: center; gap: 12px; font-size: 0.9rem; }
+    .user-info { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; }
+    .badge-e2ee { background: #135200; color: #5cdbd3; border: 1px solid #237804; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
 
     /* Main Container */
     #main-container { flex: 1; display: flex; overflow: hidden; position: relative; }
@@ -63,10 +65,22 @@
     #tab-bar { height: 35px; background: #1e1e1e; display: flex; align-items: center; padding: 0 16px; font-size: 0.85rem; color: #aaa; border-bottom: 1px solid #282a36; }
     .CodeMirror { height: 100% !important; flex: 1; font-family: 'Consolas', 'Fira Code', monospace; font-size: 14px; }
 
+    /* Right Side Pane */
+    #right-pane { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+
     /* Preview Section */
-    #preview-section { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+    #preview-section { flex: 2; display: flex; flex-direction: column; background: #ffffff; }
     #preview-header { height: 35px; background: #252526; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: #aaa; font-size: 0.85rem; border-bottom: 1px solid #333; }
     #preview-frame { flex: 1; width: 100%; border: none; background: #fff; }
+
+    /* Console Section */
+    #console-section { flex: 1; display: flex; flex-direction: column; background: #1e1e1e; border-top: 1px solid #333; }
+    #console-header { height: 30px; background: #252526; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: #aaa; font-size: 0.8rem; border-bottom: 1px solid #333; }
+    #console-logs { flex: 1; padding: 8px; font-family: monospace; font-size: 0.85rem; overflow-y: auto; color: #d4d4d4; }
+    .log-entry { margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid #2a2a2a; white-space: pre-wrap; }
+    .log-info { color: #d4d4d4; }
+    .log-warn { color: #e5c07b; }
+    .log-error { color: #f44747; }
   </style>
 </head>
 <body>
@@ -75,10 +89,11 @@
   <div id="login-screen">
     <div class="auth-card">
       <h2 id="auth-title">Login</h2>
+      <p>Data is encrypted locally using AES-GCM before transmission & storage.</p>
       <form id="auth-form" onsubmit="handleAuth(event)">
         <input type="text" id="username" placeholder="Username" required autocomplete="username">
-        <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
-        <button type="submit" id="auth-btn" class="primary">Sign In</button>
+        <input type="password" id="password" placeholder="Password (used for decryption)" required autocomplete="current-password">
+        <button type="submit" id="auth-btn" class="primary">Sign In & Decrypt</button>
       </form>
       <div class="auth-toggle" onclick="toggleAuthMode()" id="auth-toggle-btn">Need an account? Register</div>
     </div>
@@ -96,7 +111,8 @@
       </div>
 
       <div class="user-info">
-        <button class="success" onclick="updateLivePreview()">Run / Refresh Preview</button>
+        <span class="badge-e2ee">🔒 E2EE Active</span>
+        <button class="success" onclick="updateLivePreview()">Run Preview</button>
         <span id="user-display"></span>
         <button onclick="logout()">Logout</button>
       </div>
@@ -120,15 +136,25 @@
         <textarea id="editor"></textarea>
       </div>
 
-      <!-- Live Preview -->
-      <div id="preview-section">
-        <div id="preview-header">
-          <span>Live Preview</span>
-          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-            <input type="checkbox" id="auto-preview" checked> Auto-Refresh
-          </label>
+      <!-- Right Pane: Live Preview + Console -->
+      <div id="right-pane">
+        <div id="preview-section">
+          <div id="preview-header">
+            <span>Live Preview</span>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="auto-preview" checked> Auto-Refresh
+            </label>
+          </div>
+          <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
         </div>
-        <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
+
+        <div id="console-section">
+          <div id="console-header">
+            <span>Console Log</span>
+            <button onclick="clearConsole()" style="padding: 2px 6px; font-size: 0.75rem;">Clear</button>
+          </div>
+          <div id="console-logs"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -145,29 +171,98 @@
     const ALLOWED_EXTENSIONS = ['.html', '.css', '.js', '.md', '.txt'];
     let isRegisterMode = false;
     let currentUser = null;
+    let userPassword = null;
+    let cryptoKey = null;
     let projects = [];
     let activeProjectId = null;
     let activeFileName = null;
     let editor = null;
     let autoRefreshTimer = null;
 
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'CONSOLE_LOG') {
+        appendConsoleLog(event.data.level, event.data.message);
+      }
+    });
+
+    // --- Web Crypto API Helper Functions ---
+    async function deriveKey(password, salt) {
+      const enc = new TextEncoder();
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]
+      );
+      return window.crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: enc.encode(salt),
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function encryptData(plainText) {
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const enc = new TextEncoder();
+      const ciphertext = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        cryptoKey,
+        enc.encode(plainText)
+      );
+      return {
+        iv: Array.from(iv),
+        data: Array.from(new Uint8Array(ciphertext))
+      };
+    }
+
+    async function decryptData(encryptedObj) {
+      const iv = new Uint8Array(encryptedObj.iv);
+      const data = new Uint8Array(encryptedObj.data);
+      const decrypted = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        cryptoKey,
+        data
+      );
+      return new TextDecoder().decode(decrypted);
+    }
+
+    // --- Simulated Remote Server Layer ---
+    const MockServer = {
+      async syncPayload(username, encryptedPayload) {
+        // Simulates network delay sending encrypted blob to server DB
+        await new Promise(r => setTimeout(r, 100));
+        localStorage.setItem(`server_db_e2ee_${username}`, JSON.stringify(encryptedPayload));
+      },
+      async fetchPayload(username) {
+        await new Promise(r => setTimeout(r, 100));
+        const stored = localStorage.getItem(`server_db_e2ee_${username}`);
+        return stored ? JSON.parse(stored) : null;
+      }
+    };
+
     // --- Authentication ---
     function initAuth() {
       const sessionUser = sessionStorage.getItem('devworkspace_user');
-      if (sessionUser) {
+      const sessionPass = sessionStorage.getItem('devworkspace_pass');
+      if (sessionUser && sessionPass) {
         currentUser = sessionUser;
-        showWorkspace();
+        userPassword = sessionPass;
+        loginSuccess();
       }
     }
 
     function toggleAuthMode() {
       isRegisterMode = !isRegisterMode;
       document.getElementById('auth-title').textContent = isRegisterMode ? 'Register' : 'Login';
-      document.getElementById('auth-btn').textContent = isRegisterMode ? 'Sign Up' : 'Sign In';
+      document.getElementById('auth-btn').textContent = isRegisterMode ? 'Sign Up & Encrypt' : 'Sign In & Decrypt';
       document.getElementById('auth-toggle-btn').textContent = isRegisterMode ? 'Already have an account? Login' : 'Need an account? Register';
     }
 
-    function handleAuth(e) {
+    async function handleAuth(e) {
       e.preventDefault();
       const userVal = document.getElementById('username').value.trim();
       const passVal = document.getElementById('password').value.trim();
@@ -180,27 +275,41 @@
           alert('Username already exists.');
           return;
         }
-        users[userVal] = passVal;
+        users[userVal] = true; // User exists marker
         localStorage.setItem('devworkspace_users', JSON.stringify(users));
-        alert('Account created! Logging in...');
       } else {
-        if (!users[userVal] || users[userVal] !== passVal) {
+        if (!users[userVal]) {
           alert('Invalid credentials.');
           return;
         }
       }
 
       currentUser = userVal;
+      userPassword = passVal;
       sessionStorage.setItem('devworkspace_user', currentUser);
-      showWorkspace();
+      sessionStorage.setItem('devworkspace_pass', userPassword);
+
+      await loginSuccess();
+    }
+
+    async function loginSuccess() {
+      cryptoKey = await deriveKey(userPassword, currentUser);
+      try {
+        await loadProjects();
+        showWorkspace();
+      } catch (err) {
+        alert('Decryption failed! Incorrect password.');
+        logout();
+      }
     }
 
     function logout() {
       sessionStorage.removeItem('devworkspace_user');
+      sessionStorage.removeItem('devworkspace_pass');
       location.reload();
     }
 
-    // --- Workspace & CodeMirror ---
+    // --- Workspace Initialization ---
     function showWorkspace() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('workspace').style.display = 'flex';
@@ -230,35 +339,36 @@
           }
         });
       }
-
-      loadProjects();
     }
 
-    // --- Projects Management ---
-    function loadProjects() {
-      const stored = localStorage.getItem(`devworkspace_projects_${currentUser}`);
-      if (stored) {
-        projects = JSON.parse(stored);
+    // --- Projects Management with Encryption ---
+    async function loadProjects() {
+      const encryptedPayload = await MockServer.fetchPayload(currentUser);
+      if (encryptedPayload) {
+        const decryptedJson = await decryptData(encryptedPayload);
+        projects = JSON.parse(decryptedJson);
       } else {
         projects = [{
           id: 'proj_' + Date.now(),
-          name: 'Interactive Web App',
+          name: 'Encrypted Starter Project',
           files: {
-            'index.html': '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Live Preview Active</h1>\n  <p>Edit this code to see updates real-time.</p>\n  <button id="btn">Click Me</button>\n  <script src="script.js"><\/script>\n</body>\n</html>',
-            'style.css': 'body {\n  font-family: sans-serif;\n  background: #f4f4f9;\n  color: #333;\n  padding: 20px;\n}\nbutton {\n  padding: 8px 16px;\n  background: #0e639c;\n  color: white;\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}',
-            'script.js': 'document.getElementById("btn").addEventListener("click", () => {\n  alert("Button clicked!");\n});',
-            'notes.md': '# Project Overview'
+            'index.html': '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Encrypted Cloud Workspace</h1>\n  <p>Code is encrypted locally with AES-GCM prior to storage.</p>\n  <button id="btn">Test Console</button>\n  <script src="script.js"><\/script>\n</body>\n</html>',
+            'style.css': 'body {\n  font-family: sans-serif;\n  background: #f4f4f9;\n  color: #333;\n  padding: 20px;\n}',
+            'script.js': 'console.log("Decrypted script running...");\n\ndocument.getElementById("btn").addEventListener("click", () => {\n  console.log("E2EE app action logged.");\n});',
+            'notes.md': '# Private Notes'
           }
         }];
-        saveProjectsToStorage();
+        await saveProjectsToStorage();
       }
 
       renderProjectDropdown();
       if (projects.length > 0) switchProject(projects[0].id);
     }
 
-    function saveProjectsToStorage() {
-      localStorage.setItem(`devworkspace_projects_${currentUser}`, JSON.stringify(projects));
+    async function saveProjectsToStorage() {
+      const plainText = JSON.stringify(projects);
+      const encryptedObj = await encryptData(plainText);
+      await MockServer.syncPayload(currentUser, encryptedObj);
     }
 
     function renderProjectDropdown() {
@@ -406,14 +516,55 @@
       }
     }
 
+    // --- Console Interceptor Script ---
+    const consoleInterceptorScript = `
+      <script>
+        (function() {
+          const originalLog = console.log;
+          const originalWarn = console.warn;
+          const originalError = console.error;
+
+          function sendToHost(level, args) {
+            const message = Array.from(args).map(arg => 
+              typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+            ).join(' ');
+            window.parent.postMessage({ type: 'CONSOLE_LOG', level, message }, '*');
+          }
+
+          console.log = function(...args) { sendToHost('info', args); originalLog.apply(console, args); };
+          console.warn = function(...args) { sendToHost('warn', args); originalWarn.apply(console, args); };
+          console.error = function(...args) { sendToHost('error', args); originalError.apply(console, args); };
+
+          window.onerror = function(msg, url, line) {
+            sendToHost('error', [\`Error: \${msg} (Line \${line})\`]);
+          };
+        })();
+      <\/script>
+    `;
+
+    function clearConsole() {
+      document.getElementById('console-logs').innerHTML = '';
+    }
+
+    function appendConsoleLog(level, message) {
+      const logsEl = document.getElementById('console-logs');
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${level}`;
+      entry.textContent = `[${level.toUpperCase()}] ${message}`;
+      logsEl.appendChild(entry);
+      logsEl.scrollTop = logsEl.scrollHeight;
+    }
+
     // --- Live Preview Engine ---
     function updateLivePreview() {
+      clearConsole();
       const project = projects.find(p => p.id === activeProjectId);
       if (!project) return;
 
       let html = project.files['index.html'] || '<html><body>No index.html found.</body></html>';
 
-      // Inline CSS link tag replacements
+      html = html.replace('<head>', '<head>' + consoleInterceptorScript);
+
       html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["']([^"']+)["']\s*\/?>/gi, (match, src) => {
         if (project.files[src] !== undefined) {
           return `<style>\n${project.files[src]}\n</style>`;
@@ -421,7 +572,6 @@
         return match;
       });
 
-      // Inline JS script tag replacements
       html = html.replace(/<script\s+src=["']([^"']+)["']\s*><\/script>/gi, (match, src) => {
         if (project.files[src] !== undefined) {
           return `<script>\n${project.files[src]}\n<\/script>`;
